@@ -1,0 +1,43 @@
+env:
+  global:
+    - LIZARDFS_VERSION=v3.11.3
+    - VERSION=0.${TRAVIS_BUILD_NUMBER}-${LIZARDFS_VERSION}
+    - DOCKER_HUB_USER=monsonnl
+  matrix:
+    - ARCH=x86_64
+      ARCH_ALPINE_IMG=alpine:3.6
+    - ARCH=arm32v7
+      ARCH_ALPINE_IMG=armhf/alpine:3.6
+    - ARCH=arm64v8
+      ARCH_ALPINE_IMG=arm64v8/alpine:3.6
+
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  # update to the latest docker for multi-stage
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - sudo apt-get update
+  - sudo apt-get -y install docker-ce
+
+script:
+  - docker build --build-arg ARCH_SRC_DIR=${ARCH} --build-arg ARCH_ALPINE_IMG=${ARCH_ALPINE_IMG} --build-arg LIZARDFS_VERSION=${LIZARDFS_VERSION} -t ${DOCKER_HUB_USER}/lizardfs:latest-${ARCH} .
+  - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+  - docker push ${DOCKER_HUB_USER}/lizardfs:latest-${ARCH}
+  - docker tag ${DOCKER_HUB_USER}/lizardfs:latest-${ARCH} ${DOCKER_HUB_USER}/lizardfs:${LIZARDFS_VERSION}-${ARCH}
+  - docker push ${DOCKER_HUB_USER}/lizardfs:${LIZARDFS_VERSION}-${ARCH}
+
+  # if x86_64 then create the generic tag
+  - if [[ "${ARCH}" = "x86_64" ]]; then
+      docker tag ${DOCKER_HUB_USER}/lizardfs:latest-x86_64 ${DOCKER_HUB_USER}/lizardfs:latest &&
+      docker push ${DOCKER_HUB_USER}/lizardfs:latest && 
+      docker tag ${DOCKER_HUB_USER}/lizardfs:latest-x86_64 ${DOCKER_HUB_USER}/lizardfs:${LIZARDFS_VERSION} &&
+      docker push ${DOCKER_HUB_USER}/lizardfs:${LIZARDFS_VERSION};
+    fi
+
+branches:
+  only:
+    - master
